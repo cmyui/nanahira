@@ -20,8 +20,6 @@ for line in config_contents:
     line = line.split("=")
     if line[0].strip() == "TOKEN": # TEMP! Token array.
         token_array = line[1].strip()
-    else: # Config value is unknown. continue iterating anyways.
-        continue
 
 # No token array could be found in the config.
 if token_array is None:
