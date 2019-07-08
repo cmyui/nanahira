@@ -1,5 +1,6 @@
 import socket
-import string, random
+import string
+import random
 import json
 import os
 
@@ -22,6 +23,7 @@ for line in config_contents:
     else: # Config value is unknown. continue iterating anyways.
         continue
 
+# No token array could be found in the config.
 if token_array is None:
     print("No tokens found.")
     os.exit()
@@ -29,10 +31,11 @@ if token_array is None:
 # Host IP. Blank string = localhost
 SOCKET_LOCATION = "/tmp/tohru.sock"
 
-# Remove socket so we can re-use.
+# Remove socket if it exists.
 if os.path.exists(SOCKET_LOCATION):
     os.remove(SOCKET_LOCATION)
 
+# Initialize socket.
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 # Maximum amount of data we will accept.
@@ -45,7 +48,7 @@ UNSUPPORTED_FILETYPES = ["virus"] # xd
 FILENAME_LENGTH = 12
 
 # Location to save uploads to.
-SAVE_LOCATION   = "/home/cmyui/uploads/"
+SAVE_LOCATION = "/home/cmyui/uploads/"
 
 # Generate a random FILENAME_LENGTH string.
 def generate_filename(length=FILENAME_LENGTH): # Generate using all lowercase, uppercase, and digits.
@@ -91,12 +94,12 @@ def handle_request(data):
 
     # The user provided a token that is not in our accepted token array.
     if not request_token in token_array:
-        print(Fore.RED + f"Invalid HTTP Header (token): {request_token}")
+        print(f"{Fore.RED}Invalid HTTP Header (token): {request_token}")
         return False
 
     # Only submit ShareX for the time being.
     if not request_UAgent.startswith("ShareX"):
-        print(Fore.RED + f"Invalid HTTP Header (User-Agent): {request_UAgent}")
+        print(f"{Fore.RED}Invalid HTTP Header (User-Agent): {request_UAgent}")
         return
 
     # Content headers include Content-Type and Content-Disposition.
@@ -136,7 +139,7 @@ def handle_request(data):
 
     # One of the required headers was not recieved.
     if request_ContentType is None or request_IP is None or request_UAgent is None or request_token is None:
-        print(Fore.RED + "A required header was not recieved.")
+        print(f"{Fore.RED}A required header was not recieved.")
         return False
 
     # Passed checks! Generate filename and save the png/serve the filename back.
@@ -147,19 +150,30 @@ def handle_request(data):
     f.write(body)
     f.close()
 
-    print(Fore.GREEN + f"{request_IP} - Request successfully processed. File: {SAVE_LOCATION}{filename}.{extension_type}\n")
-    return f"{filename}.{extension_type}" # Return filename to be sent back
+    print(f"{Fore.GREEN}{request_IP} - Request successfully processed. File: {SAVE_LOCATION}{filename}.{extension_type}\n")
+
+    # Return the filename with extension.
+    return f"{filename}.{extension_type}"
 
 
 # Initialize our socket and begin the listener.
-print(f"\nBooting up tohru.")
+print(f"{Fore.CYAN}\nBooting up tohru.")
+
+# Create the socket file.
 sock.bind(SOCKET_LOCATION)
+
+# Since the socket has been removed, we have to give it's privileges back.
 os.chmod(SOCKET_LOCATION, 0o777)
-sock.listen(2) # param = queued connections.
-print("Waiting for requests..\n")
+
+# Begin listening for requests.
+# Param is the amount of queued connections.
+sock.listen(2)
+
+print(f"{Fore.CYAN}Waiting for requests..\n")
 
 # Iterate through connections indefinitely.
 while True:
+    # Accept incoming connection.
     conn, addr = sock.accept()
     with conn:
         while True:
@@ -168,14 +182,20 @@ while True:
             #data += conn.recv(MAX_PACKET)
             #data += conn.recv(MAX_PACKET)
             #data += conn.recv(MAX_PACKET)
-            # User is accessing from the html page.
+
+            # The user has not specified much data at all.
+            # They are almost definitely visiting from the HTML page (/api/upload).
             if len(data) < 800:
                 conn.send(b"No?")
                 conn.close()
                 break
 
+            # Handle the request, and retrieve the file name w/ extension back.
             file = handle_request(data)
-            if not file: # Request parse failed.
+
+            # An exception was raised while handling the request.
+            # Send back a 400 Bad Request response, and close the connection.
+            if not file:
                 conn.send(b"HTTP/1.1 400 Bad Request")
                 conn.send(b"\n")
                 conn.send(b'Bad request, incorrect parameters.')
@@ -184,35 +204,42 @@ while True:
 
             # We've successfully saved the image and all data was correct. Prepare to send back 200.
 
-            _response_body = { # Define this above headers for Content-Length header
+            # Set the response body to a successful request, and return required params.
+            _response_body = {
                 "success": "true",
                 "files": [
                     {
                         "name": file,
-                        "size":"4",
+                        "size":"4", # ?
                         "url":"https://toh.ru/uploads/" + file
                     }]
                 }
 
+            # JSONify the response body.
             response_body = json.dumps(_response_body)
 
+            # Set the response headers.
             response_headers = {
                 'Content-Type': 'text/html; encoding=utf-8',
                 'Content-Length': len(file) + len(response_body),
                 'Connection': 'close',
             }
 
+            # Combine the response headers.
             response_headers_raw = "".join("%s: %s\n" % (k, v) for k, v in response_headers.items())
 
-            # Status
+            # Send the HTTP status 200 OK.
             conn.send(b"HTTP/1.1 200 OK")
 
-            # Headers
+            # Send the response headers.
             conn.send(response_headers_raw.encode())
 
-            # New line to separate body
+            # Send a newline so we separate headers from the body.
             conn.send(b"\n")
 
+            # Send the response body.
             conn.send(response_body.encode())
+
+            # Finally, close the connection and break the loop.
             conn.close()
             break
