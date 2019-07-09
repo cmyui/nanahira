@@ -215,7 +215,7 @@ while True:
         while True:
             data = conn.recv(MAX_PACKET)
             # TODO: get all the data u retard lol
-            #data += conn.recv(MAX_PACKET)
+            data += conn.recv(MAX_PACKET)
             #data += conn.recv(MAX_PACKET)
             #data += conn.recv(MAX_PACKET)
 
