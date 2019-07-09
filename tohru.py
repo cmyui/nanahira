@@ -70,7 +70,7 @@ UNSUPPORTED_FILETYPES = ["virus"] # xd
 FILENAME_LENGTH = 12
 
 # Location to save uploads to.
-SAVE_LOCATION = "/home/cmyui/uploads/"
+SAVE_LOCATION = "/home/cmyui/tohru/uploads/"
 
 # Generate a random FILENAME_LENGTH string.
 def generate_filename(length=FILENAME_LENGTH): # Generate using all lowercase, uppercase, and digits.
