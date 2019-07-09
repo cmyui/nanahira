@@ -3,28 +3,52 @@ import string
 import random
 import json
 import os
+import mysql.connector
+from mysql.connector import errorcode
+import time
 
 # TODO: stop using these!
 from colorama import init
 from colorama import Fore, Back, Style
 
 # Initialize colorama.
+# autoreset ensures colors are ended at the end of strings where colors are used..
 init(autoreset=True)
 
-token_array = None
+SQL_HOST, SQL_USER, SQL_PASS, SQL_DB = [None] * 4
 
 # Config
 config = open('config.ini', 'r')
 config_contents = config.read().split("\n")
 for line in config_contents:
     line = line.split("=")
-    if line[0].strip() == "TOKEN": # TEMP! Token array.
-        token_array = line[1].strip()
+    if line[0].strip() == "SQL_HOST": # IP Address for SQL.
+        SQL_HOST = line[1].strip()
+    elif line[0].strip() == "SQL_USER": # Username for SQL.
+        SQL_USER = line[1].strip()
+    elif line[0].strip() == "SQL_PASS": # Password for SQL.
+        SQL_PASS = line[1].strip()
+    elif line[0].strip() == "SQL_DB": # DB name for SQL.
+        SQL_DB = line[1].strip()
 
-# No token array could be found in the config.
-if token_array is None:
-    print("No tokens found.")
+# MySQL
+try:
+    cnx = mysql.connector.connect(
+        user       = SQL_USER,
+        password   = SQL_PASS,
+        host       = SQL_HOST,
+        database   = SQL_DB,
+        autocommit = True)
+except mysql.connector.Error as err:
+    if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
+        print(f"{Fore.RED}Something is wrong with your username or password.")
+    elif err.errno == errorcode.ER_BAD_DB_ERROR:
+        print(f"{Fore.RED}Database does not exist.")
+    else:
+        print(f"{Fore.RED}{err}")
     os.exit()
+else:
+    SQL = cnx.cursor()
 
 # Host IP. Blank string = localhost
 SOCKET_LOCATION = "/tmp/tohru.sock"
@@ -90,14 +114,25 @@ def handle_request(data):
             elif header_key == "User-Agent":
                 request_UAgent = header_value
 
-    # The user provided a token that is not in our accepted token array.
-    if not request_token in token_array:
-        print(f"{Fore.RED}Invalid HTTP Header (token): {request_token}")
+    # The user has SOMEHOW managed to not provide an IP. Cursed?
+    if not request_IP:
+        print(f"{Fore.RED}400{Fore.CYAN} - No IP provided? What?")
         return False
+
+    # Select UserID and username from DB based on the token they provided.
+    SQL.execute("SELECT id, username FROM users WHERE token = %s", [request_token])
+    resp = SQL.fetchone()
+
+    if resp is None:
+        print(f"{Fore.RED}400{Fore.CYAN} {request_IP} - Invalid token provided: {request_token}")
+        return False
+
+    userid = resp[0]
+    username = resp[1]
 
     # Only submit ShareX for the time being.
     if not request_UAgent.startswith("ShareX"):
-        print(f"{Fore.RED}Invalid HTTP Header (User-Agent): {request_UAgent}")
+        print(f"{Fore.RED}400{Fore.CYAN} {request_IP} - Invalid HTTP Header (User-Agent): {request_UAgent}")
         return
 
     # Content headers include Content-Type and Content-Disposition.
@@ -137,21 +172,24 @@ def handle_request(data):
 
     # One of the required headers was not recieved.
     if request_ContentType is None or request_IP is None or request_UAgent is None or request_token is None:
-        print(f"{Fore.RED}A required header was not recieved.")
+        print(f"{Fore.RED}400{Fore.CYAN} | {request_IP} - A required header was not recieved.")
         return False
 
     # Passed checks! Generate filename and save the png/serve the filename back.
-    filename = generate_filename()
+    filename = generate_filename() + "." + extension_type
 
     # Write to file
-    f = open(f'{SAVE_LOCATION}{filename}.{extension_type}', 'wb+')
+    f = open(f'{SAVE_LOCATION}{filename}', 'wb+')
     f.write(body)
     f.close()
 
-    print(f"{Fore.GREEN}{request_IP} - Request successfully processed. File: {SAVE_LOCATION}{filename}.{extension_type}\n")
+    # Insert into uploads.
+    SQL.execute("INSERT INTO uploads (id, user, filename, filesize, time) VALUES (NULL, %s, %s, %s, %s)", [userid, filename, len(data), time.time()])
+
+    print(f"{Fore.GREEN}200{Fore.CYAN} | {username} - {filename}")
 
     # Return the filename with extension.
-    return f"{filename}.{extension_type}"
+    return filename
 
 
 # Initialize our socket and begin the listener.
@@ -201,7 +239,6 @@ while True:
                 break
 
             # We've successfully saved the image and all data was correct. Prepare to send back 200.
-
             # Set the response body to a successful request, and return required params.
             _response_body = {
                 "success": "true",
