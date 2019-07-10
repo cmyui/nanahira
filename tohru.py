@@ -163,7 +163,7 @@ HTTP_CODES = {
     599: "Network Connect Timeout Error"
 }
 
-def HTTP_RESPOND(conn, HTTP_STATUS, user, reason="Invalid request. Tohru only supports ShareX!"):
+def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Tohru only supports ShareX!"):
     # Print error.
     print(f"{Fore.RED}{HTTP_STATUS}{Fore.CYAN} | {user}")
 
@@ -218,10 +218,21 @@ while True:
             os.nice(-5)
 
             # Overshoot on the headers, and give the extra data back to the body.
-            full_headers = conn.recv(750).split(b"\r\n\r\n")
+            _full_headers = conn.recv(750)
 
-            print(full_headers)
-            break
+            # Somehow the request is not even 750 bytes.
+            # This is very wrong and should never happen.
+            if len(_full_headers) != 750:
+                HTTP_RESPOND(conn, 418)
+                break
+
+            full_headers = _full_headers.split(b"\r\n\r\n")
+
+            # Could not be split into 3 parts.
+            # This COULD be headers being too long, but very unlikely?
+            if len(full_headers) != 2:
+                HTTP_RESPOND(conn, 418)
+                break
 
             headers = full_headers[0].decode().split("\r\n")
             content_headers = full_headers[1].decode().split("\r\n")
