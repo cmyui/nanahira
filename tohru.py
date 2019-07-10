@@ -62,7 +62,7 @@ if os.path.exists(SOCKET_LOCATION):
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
 # Maximum amount of data we will accept.
-MAX_PACKET = 1024000 # 1024MB
+MAX_FILESIZE = 1024 # MB
 
 # Array of supported filetypes.
 UNSUPPORTED_FILETYPES = ["virus"] # xd
@@ -324,19 +324,22 @@ while True:
 
 
             """ HEADER CHECKS COMPLETE! LETS CHECK THE DATA! """
-            i = 0
-            while True:
-                interim = conn.recv(1024)
-                data += interim
-                i += 1
-                print(i)
-                
-                # Crash the program to not have infinite loop
-                # hahahahahahahahahaha hot fix hot fix hot fix hot fix
-                if not interim: break
-                # The delimiter is in the interim! We're done collecting data.
-                # I'm still 99% sure this can theoretically break and inf loop crash!
-                if delimiter in interim: break
+
+
+            # Take a small sample of the data so we can tell if we can just get it in one scoop.
+            # This happens more frequently than you'd think, even small images can be picked up this way.
+            # It also gives some protection against CURSED shit.
+            primary = conn.recv(1024)
+
+            print(f"Len primary: {len(primary)}\n\n")
+            break
+            if len(primary) == 1024 and delimiter not in primary:
+                for iteration in range (0, ((MAX_FILESIZE / 1024) * 1000) + 1): # Cap it out at our MAX_FILESIZE amt
+                    data += conn.recv(1024)
+
+                    # The delimiter is in the interim! We're done collecting data.
+                    # I'm still 99% sure this can theoretically break and inf loop crash!
+                    if delimiter in data: break
 
             # 2x2 black pixels with shareX = 167 len.
             # If they specify less than this, literally what are they doing.
@@ -348,7 +351,7 @@ while True:
             filename = generate_filename() + "." + extension_type
 
             # Write to file
-            f = open(f'{SAVE_LOCATION}{filename}', 'wb+')
+            f = open(SAVE_LOCATION + filename, 'wb+')
             f.write(data)
             f.close()
 
