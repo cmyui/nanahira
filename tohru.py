@@ -226,7 +226,7 @@ while True:
             # This is not advised, but optimal in the situation of the developer.
             os.nice(-5)
 
-            data = None
+            data = bytes()
             while True: # TODO: ShareX delimiter? Unsure if it exists.
                 addition = conn.recv(1024)
                 if not addition: break
