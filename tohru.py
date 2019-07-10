@@ -223,6 +223,7 @@ while True:
             # Somehow the request is not even 750 bytes.
             # This is very wrong and should never happen.
             if len(_full_headers) != 750:
+                print(f"1 {len(_full_headers)}")
                 HTTP_RESPOND(conn, 418)
                 break
 
@@ -231,6 +232,7 @@ while True:
             # Could not be split into 3 parts.
             # This COULD be headers being too long, but very unlikely?
             if len(full_headers) != 2:
+                print(f"2 {len(full_headers)}")
                 HTTP_RESPOND(conn, 418)
                 break
 
