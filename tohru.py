@@ -197,7 +197,7 @@ def HTTP_RESPOND(conn, HTTP_STATUS, user, reason="Invalid request. Tohru only su
     conn.send(reason)
 
     conn.close()
-    return False
+    return
 
 
 # Iterate through connections indefinitely.
@@ -324,12 +324,19 @@ while True:
 
 
             """ HEADER CHECKS COMPLETE! LETS CHECK THE DATA! """
-
-
+            i = 0
             while True:
-                data += conn.recv(1024)
-                # might have to add the last one and check incase of split
-                if delimiter in data: break
+                interim = conn.recv(1024)
+                data += interim
+                i += 1
+                print(i)
+                
+                # Crash the program to not have infinite loop
+                # hahahahahahahahahaha hot fix hot fix hot fix hot fix
+                if not interim: break
+                # The delimiter is in the interim! We're done collecting data.
+                # I'm still 99% sure this can theoretically break and inf loop crash!
+                if delimiter in interim: break
 
             # 2x2 black pixels with shareX = 167 len.
             # If they specify less than this, literally what are they doing.
