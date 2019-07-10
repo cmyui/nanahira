@@ -163,11 +163,14 @@ HTTP_CODES = {
     599: "Network Connect Timeout Error"
 }
 
-def HTTP_RESPOND(conn, HTTP_STATUS, reason="Invalid request. Tohru only supports ShareX!"):
+def HTTP_RESPOND(conn, HTTP_STATUS, user, reason="Invalid request. Tohru only supports ShareX!"):
+    # Print error.
+    print(f"{Fore.RED}{HTTP_STATUS}{Fore.CYAN} | {user}")
+
+    # Grab the readable version of the HTTP status code.
     HTTP_STATUS_READABLE = HTTP_CODES.get(HTTP_STATUS)
 
     if reason:
-        print(reason)
         reason = f"Tohru Response: {reason}".encode()
     else:
         reason = b"Great job! You have potential!"
@@ -202,7 +205,6 @@ while True:
     # Set our niceness of the program to 10.
     # Tohru is not very intensive CPU-wise whatsoever.
     # It's also very unimportant to the other things running on our machine.
-    print("how often does this run test", int(time.time()))
     psutil.Process(os.getpid()).nice(10)
 
     # Accept incoming connection.
@@ -258,7 +260,7 @@ while True:
 
             # The user has SOMEHOW managed to not provide an IP. Cursed?
             if not request_IP:
-                HTTP_RESPOND(conn, 405)
+                HTTP_RESPOND(conn, 405, request_IP)
                 break
 
             # Select UserID and username from DB based on the token they provided.
@@ -266,7 +268,7 @@ while True:
             resp = SQL.fetchone()
 
             if resp is None:
-                HTTP_RESPOND(conn, 400, reason="Invalid token.")
+                HTTP_RESPOND(conn, 400, request_IP, reason="Invalid token.")
                 break
 
             userid = resp[0]
@@ -274,7 +276,7 @@ while True:
 
             # Only submit ShareX for the time being.
             if not request_UAgent.startswith("ShareX"):
-                HTTP_RESPOND(conn, 405)
+                HTTP_RESPOND(conn, 405, username)
                 break
 
             # Content headers include Content-Type and Content-Disposition.
@@ -298,11 +300,11 @@ while True:
                         cd = header_value.split("; ")
                         if len(cd) == 3:
                             if cd[1] != 'name="files[]"':
-                                HTTP_RESPOND(conn, 400)
+                                HTTP_RESPOND(conn, 400, username)
                                 break
                             extension_type = cd[2].split(".")[-1].replace('"', "")
                         else:
-                            HTTP_RESPOND(conn, 400)
+                            HTTP_RESPOND(conn, 400, username)
                             break
 
                     # Check if the header is the Content-Type header.
@@ -312,12 +314,12 @@ while True:
 
             # Extension type is not allowed.
             if extension_type in UNSUPPORTED_FILETYPES:
-                HTTP_RESPOND(conn, 400, f"Unsupported filetype: {extension_type}.")
+                HTTP_RESPOND(conn, 400, username, reason=f"Unsupported filetype: {extension_type}.")
                 break
 
             # One of the required headers was not recieved.
             if request_ContentType is None or request_IP is None or request_UAgent is None or request_token is None:
-                HTTP_RESPOND(conn, 405)
+                HTTP_RESPOND(conn, 405, username)
                 break
 
 
@@ -329,12 +331,10 @@ while True:
                 # might have to add the last one and check incase of split
                 if delimiter in data: break
 
-            print(f"\n\n{headers}\n\n{content_headers}\n\n{data}\n\n")
-
             # 2x2 black pixels with shareX = 167 len.
             # If they specify less than this, literally what are they doing.
             if len(data) < 167:
-                HTTP_RESPOND(conn, 403, reason=f"Not enough data provided - {len(data)}.")
+                HTTP_RESPOND(conn, 403, username, reason=f"Not enough data provided - {len(data)}.")
                 break
 
             # Passed checks! Generate filename and save the png/serve the filename back.
@@ -348,6 +348,7 @@ while True:
             # Insert into uploads.
             SQL.execute("INSERT INTO uploads (id, user, filename, filesize, time) VALUES (NULL, %s, %s, %s, %s)", [userid, filename, len(data), time.time()])
 
+            # Print success.
             print(f"{Fore.GREEN}200{Fore.CYAN} | {username} - {filename}")
 
             # We've successfully saved the image and all data was correct. Prepare to send back 200.
