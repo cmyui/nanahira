@@ -331,15 +331,15 @@ while True:
             # It also gives some protection against CURSED shit.
             primary = conn.recv(1024)
 
-            print(f"Len primary: {len(primary)}\n\n")
-            break
             if len(primary) == 1024 and delimiter not in primary:
-                for iteration in range (0, ((MAX_FILESIZE / 1024) * 1000) + 1): # Cap it out at our MAX_FILESIZE amt
+                for iteration in range (0, (MAX_FILESIZE / 1024) * 1000): # Cap it out at our MAX_FILESIZE amt
                     data += conn.recv(1024)
 
-                    # The delimiter is in the interim! We're done collecting data.
                     # I'm still 99% sure this can theoretically break and inf loop crash!
                     if delimiter in data: break
+
+            # Add primary to our data.
+            data = primary + data
 
             # 2x2 black pixels with shareX = 167 len.
             # If they specify less than this, literally what are they doing.
