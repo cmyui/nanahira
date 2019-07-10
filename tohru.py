@@ -226,22 +226,22 @@ while True:
             # This is not advised, but optimal in the situation of the developer.
             os.nice(-5)
 
-            data = bytes()
-            i = 0
-            print("assigned empty bytes thing")
-            while True: # TODO: ShareX delimiter? Unsure if it exists.
-                print("running! - ", i)
-                addition = conn.recv(1024)
-                print(addition)
-                if not addition:
-                    print("braek")
-                    break
-                print("made it further than expected!")
+            #data = bytes()
+            #i = 0
+            #print("assigned empty bytes thing")
+            #while True: # TODO: ShareX delimiter? Unsure if it exists.
+            #    print("running! - ", i)
+            data = conn.recv(MAX_PACKET)
+            #    print(addition)
+            #    if addition.endswith(b''):
+            #        print("braek")
+            #        break
+            #    print("made it further than expected!")
 
-                data += addition
-                i += 1
-                print(data)
-            print(data)
+            #    data += addition
+            #    i += 1
+            #    print(data)
+            #print(data)
 
             # The user has not specified much data at all.
             # They are almost definitely visiting from the HTML page (/api/upload).
