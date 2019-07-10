@@ -3,6 +3,7 @@ import string
 import random
 import json
 import os
+import psutil
 import mysql.connector
 from mysql.connector import errorcode
 import time
@@ -209,15 +210,27 @@ print(f"{Fore.CYAN}Waiting for requests..\n")
 
 # Iterate through connections indefinitely.
 while True:
+    # Set our niceness of the program to 10.
+    # Tohru is not very intensive CPU-wise whatsoever.
+    # It's also very unimportant to the other things running on our machine.
+    print("how often does this run test", int(time.time()))
+    psutil.Process(os.getpid()).nice(10)
+
     # Accept incoming connection.
     conn, addr = sock.accept()
     with conn:
         while True:
-            data = conn.recv(MAX_PACKET)
-            # TODO: get all the data u retard lol
-            #data += conn.recv(MAX_PACKET)
-            #data += conn.recv(MAX_PACKET)
-            #data += conn.recv(MAX_PACKET)
+            # We have a connection.
+            # This has some intensity, bring up the niceness level again.
+            # NOTE: This will only work if we're running on root!
+            # This is not advised, but optimal in the situation of the developer.
+            os.nice(-5)
+
+            data = None
+            while True: # TODO: ShareX delimiter? Unsure if it exists.
+                addition = conn.recv(1024)
+                if not addition: break
+                data += addition
 
             # The user has not specified much data at all.
             # They are almost definitely visiting from the HTML page (/api/upload).
