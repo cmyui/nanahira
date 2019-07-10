@@ -77,122 +77,6 @@ SAVE_LOCATION = "/home/cmyui/tohru/uploads/"
 def generate_filename(length=FILENAME_LENGTH): # Generate using all lowercase, uppercase, and digits.
     return "".join(random.choice(string.ascii_letters + string.digits) for i in range(length))
 
-
-def handle_request(data):
-    # Split the data into headers, content headers, and body.
-    split = data.split(b"\r\n\r\n")
-    # Assign the headers and content headers from split[0] and split[1].
-    headers, content_headers = split[0].decode().split("\r\n"), split[1].decode().split("\r\n")
-    # Assign body from split[2].
-    body = split[2]
-
-    # Set request values to None.
-    request_IP, request_UAgent, request_token = [None] * 3
-
-    # Iterate through content headers to assign keys and values.
-    for header in headers:
-        # Split up the header into keys and values.
-        current_header = header.split(": ")
-
-        # Check if the header has been properly split into key and value.
-        if len(current_header) > 1:
-            # Assign the key and value for the header.
-            header_key, header_value = current_header
-
-            # Check if the header is the CF-Connecting-IP header.
-            # This header is the user's IP address, passed through cloudflare to us.
-            if header_key == "CF-Connecting-IP":
-                request_IP = header_value
-
-            # Check if the header is the token header.
-            # This is the token used in the user's ShareX config, for toh.ru.
-            elif header_key == "token":
-                request_token = header_value
-
-            # Check if the header is the User-Agent header.
-            # This header essentially shows what application the request was sent from.
-            # Since toh.ru only allows for ShareX to be used for uploads, that is what we check for.
-            elif header_key == "User-Agent":
-                request_UAgent = header_value
-
-    # The user has SOMEHOW managed to not provide an IP. Cursed?
-    if not request_IP:
-        print(f"{Fore.RED}400{Fore.CYAN} - No IP provided? What?")
-        return False
-
-    # Select UserID and username from DB based on the token they provided.
-    SQL.execute("SELECT id, username FROM users WHERE token = %s", [request_token])
-    resp = SQL.fetchone()
-
-    if resp is None:
-        print(f"{Fore.RED}400{Fore.CYAN} {request_IP} - Invalid token provided: {request_token}")
-        return False
-
-    userid = resp[0]
-    username = resp[1]
-
-    # Only submit ShareX for the time being.
-    if not request_UAgent.startswith("ShareX"):
-        print(f"{Fore.RED}400{Fore.CYAN} {request_IP} - Invalid HTTP Header (User-Agent): {request_UAgent}")
-        return
-
-    # Content headers include Content-Type and Content-Disposition.
-    request_ContentDisposition, request_ContentType, extension_type = [None] * 3
-
-    # Iterate through content headers to assign keys and values.
-    for header in content_headers:
-        # Split up the header into keys and values.
-        current_header = header.split(": ")
-
-        # Check if the header has been properly split into key and value.
-        if len(current_header) > 1:
-            # Assign the key and value for the header.
-            header_key, header_value = current_header
-
-            # Check if the header is the Content-Disposition header.
-            # This header is made up of three segments; two of which (1, 2) are useful for us.
-            # Index 1: name="files". If it is not this, they have an incorrect sharex config.
-            # Index 2: This index contains the filename they are uploading, and more importantly, the extension.
-            if header_key == "Content-Disposition":
-                cd = header_value.split("; ")
-                if len(cd) == 3:
-                    if cd[1] != 'name="files[]"':
-                        return False # They did not send files[]?
-                    extension_type = cd[2].split(".")[-1].replace('"', "")
-                else:
-                    return False # User sent an invalid Content-Disposition header.
-
-            # Check if the header is the Content-Type header.
-            # At the moment, we only check that this header exists.
-            elif header_key == "Content-Type":
-                request_ContentType = header_value
-
-    # Extension type is not allowed.
-    if extension_type in UNSUPPORTED_FILETYPES:
-        return False
-
-    # One of the required headers was not recieved.
-    if request_ContentType is None or request_IP is None or request_UAgent is None or request_token is None:
-        print(f"{Fore.RED}400{Fore.CYAN} | {request_IP} - A required header was not recieved.")
-        return False
-
-    # Passed checks! Generate filename and save the png/serve the filename back.
-    filename = generate_filename() + "." + extension_type
-
-    # Write to file
-    f = open(f'{SAVE_LOCATION}{filename}', 'wb+')
-    f.write(body)
-    f.close()
-
-    # Insert into uploads.
-    SQL.execute("INSERT INTO uploads (id, user, filename, filesize, time) VALUES (NULL, %s, %s, %s, %s)", [userid, filename, len(data), time.time()])
-
-    print(f"{Fore.GREEN}200{Fore.CYAN} | {username} - {filename}")
-
-    # Return the filename with extension.
-    return filename
-
-
 # Initialize our socket and begin the listener.
 print(f"{Fore.CYAN}\nBooting up tohru.")
 
@@ -206,7 +90,112 @@ os.chmod(SOCKET_LOCATION, 0o777)
 # Param is the amount of queued connections.
 sock.listen(2)
 
-print(f"{Fore.CYAN}Waiting for requests..\n")
+print(f"{Fore.CYAN}Waiting for requests..\n")\
+
+# Every possible HTTP code!
+HTTP_CODES = {
+    100: "Continue",
+    101: "Switching Protocols",
+    102: "Processing",
+    #2xx: Success
+    200: "OK",
+    201: "Created",
+    202: "Accepted",
+    203: "Non-authoritative Information",
+    204: "No Content",
+    205: "Reset Content",
+    206: "Partial Content",
+    207: "Multi-Status",
+    208: "Already Reported",
+    226: "IM Used",
+    #300x: Redirection
+    300: "Multiple Choices",
+    301: "Moved Permanently",
+    302: "Found",
+    303: "See Other",
+    304: "Not Modified",
+    305: "Use Proxy",
+    307: "Temporary Redirect",
+    308: "Permanent Redirect",
+    #4××: "Client Error"
+    400: "Bad Request",
+    401: "Unauthorized",
+    402: "Payment Required",
+    403: "Forbidden",
+    404: "Not Found",
+    405: "Method Not Allowed",
+    406: "Not Acceptable",
+    407: "Proxy Authentication Required",
+    408: "Request Timeout",
+    409: "Conflict",
+    410: "Gone",
+    411: "Length Required",
+    412: "Precondition Failed",
+    413: "Payload Too Large",
+    414: "Request-URI Too Long",
+    415: "Unsupported Media Type",
+    416: "Requested Range Not Satisfiable",
+    417: "Expectation Failed",
+    418: "I'm a teapot",
+    421: "Misdirected Request",
+    422: "Unprocessable Entity",
+    423: "Locked",
+    424: "Failed Dependency",
+    426: "Upgrade Required",
+    428: "Precondition Required",
+    429: "Too Many Requests",
+    431: "Request Header Fields Too Large",
+    444: "Connection Closed Without Response",
+    451: "Unavailable For Legal Reasons",
+    499: "Client Closed Request",
+    #5××: "Server Error"
+    500: "Internal Server Error",
+    501: "Not Implemented",
+    502: "Bad Gateway",
+    503: "Service Unavailable",
+    504: "Gateway Timeout",
+    505: "HTTP Version Not Supported",
+    506: "Variant Also Negotiates",
+    507: "Insufficient Storage",
+    508: "Loop Detected",
+    510: "Not Extended",
+    511: "Network Authentication Required",
+    599: "Network Connect Timeout Error"
+}
+
+def HTTP_RESPOND(conn, HTTP_STATUS, reason="Invalid request. Tohru only supports ShareX!"):
+    HTTP_STATUS_READABLE = HTTP_CODES.get(HTTP_STATUS)
+
+    if reason:
+        print(reason)
+        reason = f"Tohru Response: {reason}".encode()
+    else:
+        reason = b"Great job! You have potential!"
+
+    # Set the response headers.
+    response_headers = {
+        'Content-Type': 'text/html; encoding=utf-8',
+        'Content-Length': len(reason),
+        'Connection': 'close',
+    }
+
+    # Combine the response headers.
+    response_headers_raw = "".join("%s: %s\n" % (k, v) for k, v in response_headers.items())
+
+    # Send back status code / readable.
+    conn.send(f"HTTP/1.1 {HTTP_STATUS} {HTTP_STATUS_READABLE}".encode())
+
+    # Send the response headers.
+    conn.send(response_headers_raw.encode())
+
+    # Separate headers from body
+    conn.send(b"\n")
+
+    conn.send(reason)
+
+    conn.close()
+    return False
+
 
 # Iterate through connections indefinitely.
 while True:
@@ -226,41 +215,140 @@ while True:
             # This is not advised, but optimal in the situation of the developer.
             os.nice(-5)
 
-            #data = bytes()
-            #i = 0
-            #print("assigned empty bytes thing")
-            #while True: # TODO: ShareX delimiter? Unsure if it exists.
-            #    print("running! - ", i)
-            data = conn.recv(MAX_PACKET)
-            #    print(addition)
-            #    if addition.endswith(b''):
-            #        print("braek")
-            #        break
-            #    print("made it further than expected!")
+            # Overshoot on the headers, and give the extra data back to the body.
+            full_headers = conn.recv(750).split(b"\r\n\r\n")
 
-            #    data += addition
-            #    i += 1
-            #    print(data)
-            #print(data)
+            headers = full_headers[0].decode().split("\r\n")
+            content_headers = full_headers[1].decode().split("\r\n")
 
-            # The user has not specified much data at all.
-            # They are almost definitely visiting from the HTML page (/api/upload).
-            if len(data) < 800:
-                conn.send(b"No?")
-                conn.close()
+            delimiter = content_headers[0].encode()
+
+            data = full_headers[2]
+
+            """ BEGIN HEADER CHECKS BEFORE EVEN GETTING THE DATA! """
+
+            # Set request values to None.
+            request_IP, request_UAgent, request_token = [None] * 3
+
+            # Iterate through content headers to assign keys and values.
+            for header in headers:
+                # Split up the header into keys and values.
+                current_header = header.split(": ")
+
+                # Check if the header has been properly split into key and value.
+                if len(current_header) > 1:
+                    # Assign the key and value for the header.
+                    header_key, header_value = current_header
+
+                    # Check if the header is the CF-Connecting-IP header.
+                    # This header is the user's IP address, passed through cloudflare to us.
+                    if header_key == "CF-Connecting-IP":
+                        request_IP = header_value
+
+                    # Check if the header is the token header.
+                    # This is the token used in the user's ShareX config, for toh.ru.
+                    elif header_key == "token":
+                        request_token = header_value
+
+                    # Check if the header is the User-Agent header.
+                    # This header essentially shows what application the request was sent from.
+                    # Since toh.ru only allows for ShareX to be used for uploads, that is what we check for.
+                    elif header_key == "User-Agent":
+                        request_UAgent = header_value
+
+            # The user has SOMEHOW managed to not provide an IP. Cursed?
+            if not request_IP:
+                HTTP_RESPOND(conn, 405)
                 break
 
-            # Handle the request, and retrieve the file name w/ extension back.
-            file = handle_request(data)
+            # Select UserID and username from DB based on the token they provided.
+            SQL.execute("SELECT id, username FROM users WHERE token = %s", [request_token])
+            resp = SQL.fetchone()
 
-            # An exception was raised while handling the request.
-            # Send back a 400 Bad Request response, and close the connection.
-            if not file:
-                conn.send(b"HTTP/1.1 400 Bad Request")
-                conn.send(b"\n")
-                conn.send(b'Bad request, incorrect parameters.')
-                conn.close()
+            if resp is None:
+                HTTP_RESPOND(conn, 400, reason="Invalid token.")
                 break
+
+            userid = resp[0]
+            username = resp[1]
+
+            # Only submit ShareX for the time being.
+            if not request_UAgent.startswith("ShareX"):
+                HTTP_RESPOND(conn, 405)
+                break
+
+            # Content headers include Content-Type and Content-Disposition.
+            request_ContentDisposition, request_ContentType, extension_type = [None] * 3
+
+            # Iterate through content headers to assign keys and values.
+            for header in content_headers:
+                # Split up the header into keys and values.
+                current_header = header.split(": ")
+
+                # Check if the header has been properly split into key and value.
+                if len(current_header) > 1:
+                    # Assign the key and value for the header.
+                    header_key, header_value = current_header
+
+                    # Check if the header is the Content-Disposition header.
+                    # This header is made up of three segments; two of which (1, 2) are useful for us.
+                    # Index 1: name="files". If it is not this, they have an incorrect sharex config.
+                    # Index 2: This index contains the filename they are uploading, and more importantly, the extension.
+                    if header_key == "Content-Disposition":
+                        cd = header_value.split("; ")
+                        if len(cd) == 3:
+                            if cd[1] != 'name="files[]"':
+                                HTTP_RESPOND(conn, 400)
+                                break
+                            extension_type = cd[2].split(".")[-1].replace('"', "")
+                        else:
+                            HTTP_RESPOND(conn, 400)
+                            break
+
+                    # Check if the header is the Content-Type header.
+                    # At the moment, we only check that this header exists.
+                    elif header_key == "Content-Type":
+                        request_ContentType = header_value
+
+            # Extension type is not allowed.
+            if extension_type in UNSUPPORTED_FILETYPES:
+                HTTP_RESPOND(conn, 400, f"Unsupported filetype: {extension_type}.")
+                break
+
+            # One of the required headers was not recieved.
+            if request_ContentType is None or request_IP is None or request_UAgent is None or request_token is None:
+                HTTP_RESPOND(conn, 405)
+                break
+
+
+            """ HEADER CHECKS COMPLETE! LETS CHECK THE DATA! """
+
+
+            while True:
+                data += conn.recv(1024)
+                # might have to add the last one and check incase of split
+                if delimiter in data: break
+
+            print(f"\n\n{headers}\n\n{content_headers}\n\n{data}\n\n")
+
+            # 2x2 black pixels with shareX = 167 len.
+            # If they specify less than this, literally what are they doing.
+            if len(data) < 167:
+                HTTP_RESPOND(conn, 403, reason=f"Not enough data provided - {len(data)}.")
+                break
+
+            # Passed checks! Generate filename and save the png/serve the filename back.
+            filename = generate_filename() + "." + extension_type
+
+            # Write to file
+            f = open(f'{SAVE_LOCATION}{filename}', 'wb+')
+            f.write(data)
+            f.close()
+
+            # Insert into uploads.
+            SQL.execute("INSERT INTO uploads (id, user, filename, filesize, time) VALUES (NULL, %s, %s, %s, %s)", [userid, filename, len(data), time.time()])
+
+            print(f"{Fore.GREEN}200{Fore.CYAN} | {username} - {filename}")
 
             # We've successfully saved the image and all data was correct. Prepare to send back 200.
             # Set the response body to a successful request, and return required params.
@@ -268,9 +356,9 @@ while True:
                 "success": "true",
                 "files": [
                     {
-                        "name": file,
+                        "name": filename,
                         "size":"4", # ?
-                        "url":"https://toh.ru/uploads/" + file
+                        "url":"https://toh.ru/uploads/" + filename
                     }]
                 }
 
@@ -280,7 +368,7 @@ while True:
             # Set the response headers.
             response_headers = {
                 'Content-Type': 'text/html; encoding=utf-8',
-                'Content-Length': len(file) + len(response_body),
+                'Content-Length': len(filename) + len(response_body),
                 'Connection': 'close',
             }
 
