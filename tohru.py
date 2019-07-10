@@ -332,7 +332,7 @@ while True:
             primary = conn.recv(1024)
 
             if len(primary) == 1024 and delimiter not in primary:
-                for iteration in range (0, (MAX_FILESIZE / 1024) * 1000): # Cap it out at our MAX_FILESIZE amt
+                for iteration in range (0, (MAX_FILESIZE // 1024) * 1000): # Cap it out at our MAX_FILESIZE amt
                     data += conn.recv(1024)
 
                     # I'm still 99% sure this can theoretically break and inf loop crash!
