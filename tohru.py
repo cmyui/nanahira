@@ -230,7 +230,7 @@ while True:
 
             # Could not be split into 3 parts.
             # This COULD be headers being too long, but very unlikely?
-            if len(full_headers) != 2:
+            if len(full_headers) != 3:
                 HTTP_RESPOND(conn, 418)
                 break
 
