@@ -220,6 +220,9 @@ while True:
             # Overshoot on the headers, and give the extra data back to the body.
             full_headers = conn.recv(750).split(b"\r\n\r\n")
 
+            print(full_headers)
+            break
+
             headers = full_headers[0].decode().split("\r\n")
             content_headers = full_headers[1].decode().split("\r\n")
 
