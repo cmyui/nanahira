@@ -52,7 +52,7 @@ else:
     SQL = cnx.cursor()
 
 # Host IP. Blank string = localhost
-SOCKET_LOCATION = "/tmp/tohru.sock"
+SOCKET_LOCATION = "/tmp/nanahira.sock"
 
 # Remove socket if it exists.
 if os.path.exists(SOCKET_LOCATION):
@@ -71,14 +71,14 @@ UNSUPPORTED_FILETYPES = ["virus"] # xd
 FILENAME_LENGTH = 12
 
 # Location to save uploads to.
-SAVE_LOCATION = "/home/cmyui/tohru/uploads/"
+SAVE_LOCATION = "/home/cmyui/nanahira/uploads/"
 
 # Generate a random FILENAME_LENGTH string.
 def generate_filename(length=FILENAME_LENGTH): # Generate using all lowercase, uppercase, and digits.
     return "".join(random.choice(string.ascii_letters + string.digits) for i in range(length))
 
 # Initialize our socket and begin the listener.
-print(f"{Fore.CYAN}\nBooting up tohru.")
+print(f"{Fore.CYAN}\nBooting up nanahira.")
 
 # Create the socket file.
 sock.bind(SOCKET_LOCATION)
@@ -163,7 +163,7 @@ HTTP_CODES = {
     599: "Network Connect Timeout Error"
 }
 
-def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Tohru only supports ShareX!"):
+def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Nanahira only supports ShareX!"):
     # Print error.
     print(f"{Fore.RED}{HTTP_STATUS}{Fore.CYAN} | {user}")
 
@@ -171,7 +171,7 @@ def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Tohru only
     HTTP_STATUS_READABLE = HTTP_CODES.get(HTTP_STATUS)
 
     if reason:
-        reason = f"Tohru Response: {reason}".encode()
+        reason = f"Nanahira Response: {reason}".encode()
     else:
         reason = b"Great job! You have potential!"
 
@@ -203,7 +203,7 @@ def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Tohru only
 # Iterate through connections indefinitely.
 while True:
     # Set our niceness of the program to 10.
-    # Tohru is not very intensive CPU-wise whatsoever.
+    # Nanahira is not very intensive CPU-wise whatsoever.
     # It's also very unimportant to the other things running on our machine.
     psutil.Process(os.getpid()).nice(10)
 
@@ -262,13 +262,13 @@ while True:
                         request_IP = header_value
 
                     # Check if the header is the token header.
-                    # This is the token used in the user's ShareX config, for toh.ru.
+                    # This is the token used in the user's ShareX config, for nanahira.life.
                     elif header_key == "token":
                         request_token = header_value
 
                     # Check if the header is the User-Agent header.
                     # This header essentially shows what application the request was sent from.
-                    # Since toh.ru only allows for ShareX to be used for uploads, that is what we check for.
+                    # Since nanahira.life only allows for ShareX to be used for uploads, that is what we check for.
                     elif header_key == "User-Agent":
                         request_UAgent = header_value
 
@@ -383,7 +383,7 @@ while True:
                     {
                         "name": filename,
                         "size":"4", # ?
-                        "url":"https://toh.ru/uploads/" + filename
+                        "url":"https://nanahira.life/uploads/" + filename
                     }]
                 }
 
