@@ -233,6 +233,7 @@ while True:
             # This COULD be headers being too long, but very unlikely?
             if len(full_headers) != 3:
                 print(f"2 len (full_headers): {len(full_headers)}")
+                print(full_headers)
                 HTTP_RESPOND(conn, 418)
                 break
 
