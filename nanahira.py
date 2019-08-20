@@ -16,21 +16,20 @@ from colorama import Fore, Back, Style
 # autoreset ensures colors are ended at the end of strings where colors are used..
 init(autoreset=True)
 
-SQL_HOST, SQL_USER, SQL_PASS, SQL_DB = [None] * 4
+SQL_HOST, SQL_USER, SQL_PASS, SQL_DB = [None] * 4 
 
 # Config
-config = open('config.ini', 'r')
-config_contents = config.read().split("\n")
+with open("config.ini", 'r') as config:
+    config_contents = config.read().split("\n")
+
+if not config_contents: raise Exception("No values found in config.ini")
+
 for line in config_contents:
-    line = line.split("=")
-    if line[0].strip() == "SQL_HOST": # IP Address for SQL.
-        SQL_HOST = line[1].strip()
-    elif line[0].strip() == "SQL_USER": # Username for SQL.
-        SQL_USER = line[1].strip()
-    elif line[0].strip() == "SQL_PASS": # Password for SQL.
-        SQL_PASS = line[1].strip()
-    elif line[0].strip() == "SQL_DB": # DB name for SQL.
-        SQL_DB = line[1].strip()
+    key, val = line.replace(' ', '').split("=")
+    if key == "SQL_HOST": SQL_HOST = val
+    elif key == "SQL_USER": SQL_USER = val
+    elif key == "SQL_PASS": SQL_PASS = val
+    elif key == "SQL_DB": SQL_DB = val
 
 # MySQL
 try:
@@ -55,8 +54,7 @@ else:
 SOCKET_LOCATION = "/tmp/nanahira.sock"
 
 # Remove socket if it exists.
-if os.path.exists(SOCKET_LOCATION):
-    os.remove(SOCKET_LOCATION)
+if os.path.exists(SOCKET_LOCATION): os.remove(SOCKET_LOCATION)
 
 # Initialize socket.
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -75,7 +73,7 @@ SAVE_LOCATION = "/home/cmyui/nanahira/uploads/"
 
 # Generate a random FILENAME_LENGTH string.
 def generate_filename(length=FILENAME_LENGTH): # Generate using all lowercase, uppercase, and digits.
-    return "".join(random.choice(string.ascii_letters + string.digits) for i in range(length))
+    return ''.join(random.choice(string.ascii_letters + string.digits) for i in range(length))
 
 # Initialize our socket and begin the listener.
 print(f"{Fore.CYAN}\nBooting up nanahira.")
@@ -170,10 +168,8 @@ def HTTP_RESPOND(conn, HTTP_STATUS, user="", reason="Invalid request. Nanahira o
     # Grab the readable version of the HTTP status code.
     HTTP_STATUS_READABLE = HTTP_CODES.get(HTTP_STATUS)
 
-    if reason:
-        reason = f"Nanahira Response: {reason}".encode()
-    else:
-        reason = b"Great job! You have potential!"
+    if reason: reason = f"Nanahira Response: {reason}".encode()
+    else: reason = b"Great job! You have potential!"
 
     # Set the response headers.
     response_headers = {
@@ -366,9 +362,7 @@ while True:
             filename = generate_filename() + "." + extension_type
 
             # Write to file
-            f = open(SAVE_LOCATION + filename, 'wb+')
-            f.write(data)
-            f.close()
+            with open(SAVE_LOCATION + filename, "wb+") as f: f.write(data)
 
             # Insert into uploads.
             SQL.execute("INSERT INTO uploads (id, user, filename, filesize, time) VALUES (NULL, %s, %s, %s, %s)", [userid, filename, len(data), time.time()])
