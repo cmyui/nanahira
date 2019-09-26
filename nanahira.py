@@ -16,7 +16,7 @@ from colorama import Fore, Back, Style
 # autoreset ensures colors are ended at the end of strings where colors are used..
 init(autoreset=True)
 
-SQL_HOST, SQL_USER, SQL_PASS, SQL_DB = [None] * 4 
+SQL_HOST, SQL_USER, SQL_PASS, SQL_DB = [None] * 4
 
 # Config
 with open("config.ini", 'r') as config:
@@ -46,7 +46,7 @@ except mysql.connector.Error as err:
         print(f"{Fore.RED}Database does not exist.")
     else:
         print(f"{Fore.RED}{err}")
-    os.exit()
+    os._exit(0)
 else:
     SQL = cnx.cursor()
 
